@@ -1,31 +1,28 @@
+// config/db.js
 import mongoose from "mongoose";
 
-// const connectDB = async () => {
-//   try {
-//     const conn = await mongoose.connect(process.env.MONGO_URI);
-//     console.log(`MongoDB Connected: ${conn.connection.host}`);
-//   } catch (err) {
-//     console.error(`Error: ${err.message}`);
-//     process.exit(1);
-//   }
-// };
+let cached = global.mongoose;
 
-// export default connectDB;
-
-let isconnected = false;
-
-async function connectDB() {
-  if (isconnected) {
-    console.log("Already connected to the database");
-    return;
-  }
-  try {
-    const conn = await mongoose.connect(process.env.MONGO_URI);
-    isconnected = true;
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
-  } catch (err) {
-    console.error(`Error: ${err.message}`);
-    process.exit(1);
-  }
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null };
 }
-export default connectDB;
+
+export default async function connectDB() {
+  if (cached.conn) {
+    return cached.conn;
+  }
+
+  if (!process.env.MONGO_URI) {
+    throw new Error("MONGO_URI is not set");
+  }
+
+  if (!cached.promise) {
+    cached.promise = mongoose.connect(process.env.MONGO_URI).then(m => m.connection).catch(err => {
+      cached.promise = null;
+      throw err;
+    });
+  }
+
+  cached.conn = await cached.promise;
+  return cached.conn;
+}
